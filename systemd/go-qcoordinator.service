@@ -1,0 +1,11 @@
+[Unit]
+Description=Beanstalkd Go Dispatcher
+
+[Service]
+Type=simple
+WatchdogSec=30s
+Restart=on-failure
+ExecStart=/usr/bin/godispatcher
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,29 @@
+logging:
+  Filename: ./go-qcoordinator.log
+  MaxSize: 100
+  MaxBackups: 3
+  MaxAge: 28
+monitor:  
+  host: 127.0.0.1:8086
+brokers:
+  - listen: 192.168.68.171:8087
+    scheduler: lottery
+    queuehost: "localhost:11300"
+    workertype: cmd
+    workerendpoint: 
+      - "/bin/bash"
+      - "-c"
+      - "cat "
+    concurrent: 20
+    queues:    
+      - priority: 300
+        queuenames: 
+          - "default1"          
+      - priority: 100
+        queuenames: 
+          - "default2"          
+          - "default3"
+      - priority: 50
+        queuenames:           
+          - "others"    
+                       

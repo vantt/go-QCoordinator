@@ -1,1 +1,3 @@
 # go-QCoordinator
+
+dispatcher --> worker
