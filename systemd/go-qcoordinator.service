@@ -1,11 +1,11 @@
 [Unit]
-Description=Beanstalkd Go Dispatcher
+Description=Beanstalkd Go-QCoordinator
 
 [Service]
 Type=simple
 WatchdogSec=30s
 Restart=on-failure
-ExecStart=/usr/bin/godispatcher
+ExecStart=/usr/bin/go-qcoordinator
 
 [Install]
 WantedBy=multi-user.target
