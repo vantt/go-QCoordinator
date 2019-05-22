@@ -14,7 +14,7 @@ import (
 type Broker struct {
 	config config.BrokerConfig
 	logger *zap.Logger	
-	server *tcpserver.TcpChatServer
+	server *tcpserver.TcpServer
 	dispatcher *dispatcher.Dispatcher
 	wgChild sync.WaitGroup
 }
@@ -54,12 +54,14 @@ func (br *Broker) Start(ctx context.Context, wg *sync.WaitGroup) error {
 }
 
 func (br *Broker) setup(ctx context.Context) error {
+	childReady := make(chan string, 2)
+
+	defer close(childReady)
+
 	br.logger.Info("Broker setting up ....")
 	
 	br.dispatcher = dispatcher.NewDispatcher(br.config, br.logger)
 	br.server = tcpserver.NewServer(br.config.Listen, br.dispatcher, br.logger)
-
-	childReady := make(chan string, 3)
 
 	br.wgChild.Add(1)
 	if err := br.dispatcher.Start(ctx, &(br.wgChild), childReady); err != nil {
@@ -77,8 +79,6 @@ func (br *Broker) setup(ctx context.Context) error {
 	for i:=0; i < 2; i++  {
 		br.logger.Info(<-childReady)
 	}
-
-	close(childReady)
 
 	return nil
 }

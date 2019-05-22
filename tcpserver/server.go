@@ -1,7 +1,6 @@
 package tcpserver
 
-import (
-	"errors"
+import (	
 	"io"
 	"net"
 	"sync"
@@ -14,13 +13,7 @@ import (
 	"github.com/vantt/go-QCoordinator/dispatcher"
 )
 
-type client struct {
-	index  int
-	conn   net.Conn	
-	writer *protocol.CommandWriter
-}
-
-type TcpChatServer struct {
+type TcpServer struct {
 	address string
 	listener *net.TCPListener
 	clients  []*client
@@ -29,13 +22,9 @@ type TcpChatServer struct {
 	logger   *zap.Logger
 }
 
-var (
-	UnknownClient = errors.New("Unknown client")
-)
-
 // NewServer ...
-func NewServer(address string, dp *dispatcher.Dispatcher, logger *zap.Logger) *TcpChatServer {
-	return &TcpChatServer{
+func NewServer(address string, dp *dispatcher.Dispatcher, logger *zap.Logger) *TcpServer {
+	return &TcpServer{
 		address: address,
 		mutex: &sync.Mutex{},
 		dispatcher: dp,
@@ -43,7 +32,7 @@ func NewServer(address string, dp *dispatcher.Dispatcher, logger *zap.Logger) *T
 	}
 }
 
-func (s *TcpChatServer) setup() error {
+func (s *TcpServer) setup() error {
 	var (
 		la *net.TCPAddr
 		l *net.TCPListener
@@ -68,12 +57,12 @@ func (s *TcpChatServer) setup() error {
 }
 
 // Stop ...
-func (s *TcpChatServer) Stop() {
+func (s *TcpServer) Stop() {
 	s.listener.Close()
 }
 
 // Start ...
-func (s *TcpChatServer) Start(ctx context.Context, wg *sync.WaitGroup, readyChan chan<- string ) error {
+func (s *TcpServer) Start(ctx context.Context, wg *sync.WaitGroup, readyChan chan<- string ) error {
 	if err := s.setup(); err != nil {
 		return err
 	}
@@ -84,6 +73,7 @@ func (s *TcpChatServer) Start(ctx context.Context, wg *sync.WaitGroup, readyChan
 		defer func() {
 			wgChild.Wait()			
 			wg.Done()
+			s.logger.Info("Tcpserver QUIT.")
 		}()
 
 
@@ -107,7 +97,7 @@ func (s *TcpChatServer) Start(ctx context.Context, wg *sync.WaitGroup, readyChan
 				// handle connection
 				client := s.accept(conn)
 				wgChild.Add(1)
-				go s.serve(&(wgChild), client)
+				go s.serve(ctx, &(wgChild), client)
 			}
 		}
 	}()	
@@ -117,92 +107,117 @@ func (s *TcpChatServer) Start(ctx context.Context, wg *sync.WaitGroup, readyChan
 	return nil
 }
 
-func (s *TcpChatServer) Send(client *client, command interface{}) error {	
-	return client.writer.WriteCommand(command)
+func (s *TcpServer) Send(client *client, cmd protocol.CommandInterface) {	
+	client.WriteCommand(cmd)
 }
 
-func (s *TcpChatServer) accept(conn net.Conn) *client {
+func (s *TcpServer) accept(conn net.Conn) *client {
 	s.logger.Info(fmt.Sprintf("Accepting connection from %v, total clients: %v", conn.RemoteAddr().String(), len(s.clients)+1))
 
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	client := &client{
-		index:  len(s.clients),
-		conn:   conn,
-		writer: protocol.NewCommandWriter(conn),
-	}
-
+	client := NewClient(conn, len(s.clients))
+		
 	s.clients = append(s.clients, client)
 
 	return client
 }
 
-func (s *TcpChatServer) remove(client *client) {
+func (s *TcpServer) remove(client *client) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
+	client.Close()
+
 	// remove the connections from clients array
 	s.clients = append(s.clients[:client.index], s.clients[client.index+1:]...)
-
-	client.conn.Close()
-		
+	
 	s.logger.Info(fmt.Sprintf("Closing connection from %v, total clients: %v", client.conn.RemoteAddr().String(), len(s.clients)+1))
 }
 
-func (s *TcpChatServer) serve(wg *sync.WaitGroup, client *client) {
+func (s *TcpServer) serve(ctx context.Context, wg *sync.WaitGroup, client *client) {
+	var wgChild sync.WaitGroup
+
 	defer func() {
+		wgChild.Wait()
 		s.remove(client)
 		wg.Done()
 	}()
 
-	s.Send(client, &protocol.HelloCommand{})
-
-	cmdReader := protocol.NewCommandReader(client.conn)
+	client.WriteCommand(&protocol.HelloCommand{})
 
 	for {
-		cmd, err := cmdReader.Read()
-		
-		if err != nil && err != io.EOF {
-			s.logger.Error(fmt.Sprintf("Read error: %v", err))
-		}
+		select {
+			case <-ctx.Done():				
+				return
 
-		if cmd != nil {
-			switch v := cmd.(type) {
-			case *protocol.ReserveCommand:				
-				go func() {
-					select {
-					case task, ok := <-s.dispatcher.Reserve():
-						if ok {
-							cmd := &protocol.TaskCommand{
-								ID:  task.ID, 
-								Queue: task.QueueName, 
-								Payload: task.Payload.([]byte),
-							}
-		
-							s.Send(client, cmd)
-						} else {
-							s.Send(client, &protocol.NoTaskCommand{} )
-						}
-					default:
-						s.Send(client, &protocol.NoTaskCommand{} )
-					}					
-				}()
+			default:					
+				cmd, err := client.Read()
 
-			case *protocol.ResultCommand:				
-				go func() {
-					result := &dispatcher.TaskResult{ 
-						ID: v.ID, 
-						ExitCode: v.ExitCode,
+				if err == nil && cmd != nil {
+					switch v := cmd.(type) {					
+					case *protocol.ReserveCommand:
+						wgChild.Add(1)		
+						go s.handleReserveCommand(ctx, &(wgChild), client)
+
+					case *protocol.ResultCommand:				
+						wgChild.Add(1)	
+						go s.handleResultCommand(&(wgChild), v)
 					}
+				}
 
-					s.dispatcher.Done(result)
-				}()
-			}
-		}
-
-		if err == io.EOF {
-			break
+				if (err == protocol.UnknownCommandErr) {
+					client.WriteCommand(&protocol.UnknownCommand{})
+				} else if err == io.EOF {
+					return
+				} 
 		}
 	}
+}
+
+func (s *TcpServer) handleReserveCommand(ctx context.Context, wg *sync.WaitGroup, client *client) {
+
+	tickerTimeOut := time.NewTicker(1 * time.Second)
+
+	defer func() {
+	 	tickerTimeOut.Stop()
+		wg.Done()
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():			
+			client.WriteCommand(&protocol.NoTaskCommand{})
+			return
+
+		case <-tickerTimeOut.C:
+			client.WriteCommand(&protocol.NoTaskCommand{})
+			return
+
+		case task, ok := <-s.dispatcher.Reserve():
+			if ok {
+				cmd := &protocol.TaskCommand{
+					ID:  task.ID, 
+					Queue: task.QueueName, 
+					Payload: task.Payload.([]byte),
+				}
+
+				client.WriteCommand(cmd)
+				
+				return
+			}
+		}
+	}
+}
+
+func (s *TcpServer) handleResultCommand(wg *sync.WaitGroup, cmd *protocol.ResultCommand) {
+	defer wg.Done()
+
+	result := &dispatcher.TaskResult{ 
+		ID: cmd.ID, 
+		ExitCode: cmd.ExitCode,
+	}
+
+	s.dispatcher.Done(result)
 }

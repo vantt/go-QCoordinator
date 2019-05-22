@@ -66,7 +66,7 @@ func (r *CommandReader) Read() (interface{}, error) {
 		}
 	}
 
-	return nil, UnknownCommand
+	return nil, UnknownCommandErr
 }
 
 // ReadAll ...

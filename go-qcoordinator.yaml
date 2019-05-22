@@ -8,13 +8,7 @@ monitor:
 brokers:
   - listen: 192.168.68.171:8087
     scheduler: lottery
-    queuehost: "localhost:11300"
-    workertype: cmd
-    workerendpoint: 
-      - "/bin/bash"
-      - "-c"
-      - "cat "
-    concurrent: 20
+    queuehost: "localhost:11300"    
     queues:    
       - priority: 300
         queuenames: 
