@@ -77,8 +77,8 @@ func ParseConfig() (config *Configuration, err error) {
 		cfg.SetConfigFile(*filepath)
 	} else {
 		cfg.SetConfigName("go-qcoordinator")
-		cfg.AddConfigPath("/etc/godispatcher")
-		cfg.AddConfigPath("$HOME/.godispatcher")
+		cfg.AddConfigPath("/etc/go-qcoordinator")
+		cfg.AddConfigPath("$HOME/.go-qcoordinator")
 		cfg.AddConfigPath(".") // optionally look for config in the working directory
 	}
 	

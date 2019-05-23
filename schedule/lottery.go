@@ -6,19 +6,19 @@ import (
 	"strconv"
 	"sync"
 	"context"
+	"go.uber.org/zap"
 	"github.com/olekukonko/tablewriter"
 	"github.com/vantt/go-QCoordinator/config"
 	"github.com/vantt/go-QCoordinator/stats"
-	"go.uber.org/zap"
 )
 
 // Lottery ...
 type Lottery struct {
 	statAgent    *stats.StatisticAgent
 	config       *config.BrokerConfig
-	tickets      map[string]uint64
+	tickets      map[string]int64
 	priority     map[string]uint64
-	totalTickets uint64
+	totalTickets int64
 	sync.RWMutex
 	logger *zap.Logger
 }
@@ -29,23 +29,23 @@ func NewLotteryScheduler(c *config.BrokerConfig, sa *stats.StatisticAgent, logge
 		statAgent:    sa,
 		config:       c,
 		priority:     make(map[string]uint64),
-		totalTickets: 0,
+		totalTickets: 1,
 		logger: logger,
 	}
 }
 
 // GetNextQueue ..
 func (lt *Lottery) GetNextQueue() (queueName string, found bool) {
+	var ticket int64
+
 	queueName = ""
 	found = false
-
-	winner := uint64(rand.Intn(100))
-	counter := uint64(0)
+	
+	winner := rand.Int63n(lt.totalTickets)
+	counter := int64(0)
 
 	lt.RLock()
 	defer lt.RUnlock()
-
-	var ticket uint64
 
 	for queueName, ticket = range lt.tickets {
 		counter = counter + ticket
@@ -90,36 +90,37 @@ func (lt *Lottery) Start(ctx context.Context, wg *sync.WaitGroup, readyChan chan
 	}()
 }
 
-func (lt *Lottery) assignTickets(stats *stats.ServerStatistic) {
-	tickets := make(map[string]uint64)
-	tmpTickets := make(map[string]float64)
-	total := float64(0)
+func (lt *Lottery) assignTickets(stats *stats.ServerStatistic) {	
+	tmpTickets := make(map[string]int64)
+	tmpTotal := int64(0)
 
 	// assign WSJF for every queue
 	for _, queueName := range stats.GetQueueNames() {
 
 		if stat, found := stats.GetQueue(queueName); found {
-			wsjf := lt.wsjf(stat, lt.getQueuePriority(queueName))
+			wsjf := lt.wsjfInt64(stat, lt.getQueuePriority(queueName))
 
-			if wsjf > 0 {
-				total = total + wsjf
+			if wsjf > 0 {				
 				tmpTickets[queueName] = wsjf
+				tmpTotal += wsjf
 			}
 		}
 	}
 
 	// convert WSJF to Percent
-	lt.totalTickets = 0
-
-	for queueName := range tmpTickets {
-		tickets[queueName] = uint64((tmpTickets[queueName] / total) * 100)
-		lt.totalTickets += tickets[queueName]
-	}
+	// if isPercent := true; isPercent {
+	// 	for k, v := range tmpTickets {
+	// 		tmpTickets[k] = (v / tmpTotal) * 100
+	// 	}
+		
+	// 	tmpTotal = 100
+	// } 
 
 	lt.Lock()
 	defer lt.Unlock()
 
-	lt.tickets = tickets
+	lt.totalTickets = tmpTotal
+	lt.tickets = tmpTickets
 
 	//dumpStats(stats, tickets)
 }
@@ -141,7 +142,7 @@ func (lt *Lottery) getQueuePriority(queueName string) uint64 {
 // WSJF = Cost of Delay / Job Duration(Size)
 // Cost of Delay = NumJobs * Priority
 // JobDuration = NumJobs * JobAvgTime
-func (lt *Lottery) wsjf(stat *stats.QueueStatistic, priority uint64) float64 {
+func (lt *Lottery) wsjfFloat(stat *stats.QueueStatistic, priority uint64) float64 {
 	NumJobs := float64(stat.GetTotalItems())
 	AvgCost := stat.GetAvgJobCost()
 
@@ -149,6 +150,16 @@ func (lt *Lottery) wsjf(stat *stats.QueueStatistic, priority uint64) float64 {
 	JobDuration := NumJobs * AvgCost
 
 	return CostOfDelay / JobDuration
+}
+
+func (lt *Lottery) wsjfInt64(stat *stats.QueueStatistic, priority uint64) int64 {
+	NumJobs := float64(stat.GetTotalItems())
+	AvgCost := stat.GetAvgJobCost()
+
+	CostOfDelay := NumJobs * float64(priority)
+	JobDuration := NumJobs * AvgCost
+
+	return int64(CostOfDelay / JobDuration)
 }
 
 // UpdateJobCost ...

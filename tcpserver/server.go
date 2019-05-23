@@ -107,7 +107,7 @@ func (s *TcpServer) Start(ctx context.Context, wg *sync.WaitGroup, readyChan cha
 	return nil
 }
 
-func (s *TcpServer) Send(client *client, cmd protocol.CommandInterface) {	
+func (s *TcpServer) SendCommand(client *client, cmd protocol.CommandInterface) {	
 	client.WriteCommand(cmd)
 }
 
@@ -214,10 +214,5 @@ func (s *TcpServer) handleReserveCommand(ctx context.Context, wg *sync.WaitGroup
 func (s *TcpServer) handleResultCommand(wg *sync.WaitGroup, cmd *protocol.ResultCommand) {
 	defer wg.Done()
 
-	result := &dispatcher.TaskResult{ 
-		ID: cmd.ID, 
-		ExitCode: cmd.ExitCode,
-	}
-
-	s.dispatcher.Done(result)
+	s.dispatcher.Done(dispatcher.NewTaskResult(cmd.ID, cmd.ExitCode))
 }

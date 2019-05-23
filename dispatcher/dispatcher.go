@@ -6,7 +6,7 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
-"fmt"	
+
 	"go.uber.org/zap"
 	"github.com/vantt/go-QCoordinator/config"
 	"github.com/vantt/go-QCoordinator/queue"
@@ -43,7 +43,7 @@ type Dispatcher struct {
 	taskChan       chan *queue.Job
 	resultChan     chan *TaskResult
 
-	taskResultMap *TaskResultMap	
+	reservingTasks *ReservingTaskMap	
 	
 }
 
@@ -51,8 +51,7 @@ type Dispatcher struct {
 func NewDispatcher(cfg config.BrokerConfig,logger *zap.Logger) *Dispatcher {
 	return &Dispatcher{
 		config: cfg, 		
-		logger: logger,
-		taskResultMap:  NewTaskResultMap(),
+		logger: logger,		
 		reserveChan:    make(chan struct{}, 1000),
 		taskChan:       make(chan *queue.Job, 1000),
 		resultChan:     make(chan *TaskResult, 1000),		
@@ -108,7 +107,8 @@ func (tc *Dispatcher) Start(ctx context.Context, wg *sync.WaitGroup, readyChan c
 						defer tc.wgChild.Done()
 
 						if job := tc.reserveJob(); job != nil {
-							tc.taskResultMap.CreateTaskResult(job)
+
+							tc.reservingTasks.AddItem(NewReservingTask(job))
 							tc.taskChan <- job
 						}
 					}()
@@ -121,12 +121,8 @@ func (tc *Dispatcher) Start(ctx context.Context, wg *sync.WaitGroup, readyChan c
 					go func() {
 						defer tc.wgChild.Done()
 
-						if t := tc.taskResultMap.GetResult(result.ID); t != nil {
-							result.StartTime = t.StartTime
-							result.queue = t.queue														
-
-							tc.handleJobResult(result)
-							tc.taskResultMap.RemoveTaskResult(result.ID)
+						if task := tc.reservingTasks.GetItem(result.ID); task != nil {
+							tc.handleJobResult(task, result)							
 						}
 					}()					
 				}
@@ -138,8 +134,11 @@ func (tc *Dispatcher) Start(ctx context.Context, wg *sync.WaitGroup, readyChan c
 }
 
 func (tc *Dispatcher) setup(ctx context.Context) error {
-	tc.logger.Info("Dispatcher setting up ....")
 	var err error
+
+	tc.logger.Info("Dispatcher setting up ....")
+	
+	tc.reservingTasks = NewReservingTaskMap(ctx, tc.logger)
 
 	if tc.connPool, err = tc.createQueueConnectionPool(); err != nil {
 		return err
@@ -183,41 +182,38 @@ func (tc *Dispatcher) Done(ts *TaskResult) {
 	tc.resultChan <- ts	
 }
 
-func (tc *Dispatcher) handleJobResult(result *TaskResult) (err error) {
+func (tc *Dispatcher) handleJobResult(task *ReservingTask, result *TaskResult) (err error) {
 	defer func() {
 		atomic.AddInt32(&(tc.processingJobs), -1)
 	}()
 
 	logger := tc.logger.With(
-		zap.String("queue", result.queue),
-		zap.Uint64("job_id", result.ID),
+		zap.String("queue", task.Queue),
+		zap.Uint64("job_id", task.ID),
 		zap.Int("exitCode", result.ExitCode),
 	)
 
 	logger.Info("Handle job result")
 
-	result.CalcRuntime()	
-	tc.scheduler.UpdateJobCost(result.queue, result.Runtime)
+	task.CalcRuntime()	
+	tc.scheduler.UpdateJobCost(task.Queue, task.Runtime)
 
-	if result.isTimedOut {
-		logger.Error("Task execution TimeOut")
-		return
-	}
+	// we dont process TIMEOUT task here
+	// because the queue will automatically give task to another worker
 
 	switch result.ExitCode {
 	case 0:
 
-		err = tc.connPool.DeleteMessage(result.queue, result.ID)
+		err = tc.connPool.DeleteMessage(task.Queue, task.ID)
 
 		if err == nil {
-			logger.Info("Delete job")
-			//logger.Info(strings.Join(result.Body, "..."))
+			logger.Info("Delete job")			
 		} else {
 			logger.With(zap.String("error", err.Error())).Error("Deleting job FAIL")			
 		}
 
 	default:
-		r := result.NumReturns
+		r := task.NumReturns
 
 		if r <= 0 {
 			r = 1
@@ -229,7 +225,7 @@ func (tc *Dispatcher) handleJobResult(result *TaskResult) (err error) {
 
 		logger.With(zap.String("error", result.ErrorMsg)).Error("Job execution FAIL")
 
-		err = tc.connPool.ReturnMessage(result.queue, result.ID, delay)
+		err = tc.connPool.ReturnMessage(task.Queue, task.ID, delay)
 
 		if err != nil {
 			logger.With(zap.String("error", result.ErrorMsg)).Error("Return job Fail")
@@ -237,6 +233,8 @@ func (tc *Dispatcher) handleJobResult(result *TaskResult) (err error) {
 			logger.Info("Return job")
 		}
 	}
+
+	tc.reservingTasks.RemoveItem(task.ID)
 
 	return
 }
@@ -247,8 +245,6 @@ func (tc *Dispatcher) reserveJob() *queue.Job {
 		job := tc.getNextJob()
 
 		if job != nil {
-
-			tc.logger.Info(fmt.Sprintf("%v", job))
 
 			// if job was processed too many times, just GiveUp (burry job)
 			if job.NumReturns > ReturnTries || job.NumTimeOuts > TimeoutTries {

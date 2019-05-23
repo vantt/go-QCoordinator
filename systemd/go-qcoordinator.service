@@ -1,5 +1,5 @@
 [Unit]
-Description=Beanstalkd Go-QCoordinator
+Description=Beanstalkd Go Queue Coordinator
 
 [Service]
 Type=simple
