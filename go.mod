@@ -11,6 +11,7 @@ require (
 	github.com/kr/beanstalk v0.0.0-20180818045031-cae1762e4858
 	github.com/nqbao/learn-go v0.0.0-20181108061536-3345751e46bf
 	github.com/olekukonko/tablewriter v0.0.1
+	github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.3.2
 	github.com/vantt/go-cmd v1.0.5

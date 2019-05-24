@@ -107,8 +107,6 @@ func (tc *Dispatcher) Start(ctx context.Context, wg *sync.WaitGroup, readyChan c
 						defer tc.wgChild.Done()
 
 						if job := tc.reserveJob(); job != nil {
-
-							tc.reservingTasks.AddItem(NewReservingTask(job))
 							tc.taskChan <- job
 						}
 					}()
@@ -256,9 +254,10 @@ func (tc *Dispatcher) reserveJob() *queue.Job {
 					tc.logger.With(zap.String("queue", job.QueueName), zap.Uint64("job_id", job.ID)).Info("Give up job")
 				}
 			} else {
-				tc.logger.With(zap.String("queue", job.QueueName), zap.Uint64("job_id", job.ID)).Info("Process job")
-
+				tc.reservingTasks.AddItem(NewReservingTask(job))
 				atomic.AddInt32(&(tc.processingJobs), 1)
+
+				tc.logger.With(zap.String("queue", job.QueueName), zap.Uint64("job_id", job.ID)).Info("Process job")
 
 				return job
 			}
