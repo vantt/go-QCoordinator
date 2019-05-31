@@ -18,6 +18,7 @@ type Lottery struct {
 	config       *config.BrokerConfig
 	tickets      map[string]int64
 	priority     map[string]uint64
+	metrics		 *ScheduleMetrics
 	totalTickets int64
 	sync.RWMutex
 	logger *zap.Logger
@@ -29,6 +30,7 @@ func NewLotteryScheduler(c *config.BrokerConfig, sa *stats.StatisticAgent, logge
 		statAgent:    sa,
 		config:       c,
 		priority:     make(map[string]uint64),
+		metrics:      NewScheduleMetrics(),
 		totalTickets: 1,
 		logger: logger,
 	}
@@ -82,7 +84,11 @@ func (lt *Lottery) Start(ctx context.Context, wg *sync.WaitGroup, readyChan chan
 				}
 
 				lt.assignTickets(stats)
-				
+
+				for queue, tickets := range lt.tickets {
+					lt.metrics.Set("tickets", float64(tickets), []string{queue})
+				}
+
 			case <-ctx.Done():				
 				return
 			}

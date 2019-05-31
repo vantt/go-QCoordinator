@@ -6,11 +6,13 @@ require (
 	github.com/brianvoe/gofakeit v3.17.0+incompatible
 	github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e
 	github.com/davecgh/go-spew v1.1.1
+	github.com/deathowl/go-metrics-prometheus v0.0.0-20181105123824-7cfe975c505b
 	github.com/go-akka/configuration v0.0.0-20190109144621-439b15a79294
 	github.com/heptiolabs/healthcheck v0.0.0-20180807145615-6ff867650f40
 	github.com/kr/beanstalk v0.0.0-20180818045031-cae1762e4858
 	github.com/nqbao/learn-go v0.0.0-20181108061536-3345751e46bf
 	github.com/olekukonko/tablewriter v0.0.1
+	github.com/prometheus/client_golang v0.9.2
 	github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.3.2

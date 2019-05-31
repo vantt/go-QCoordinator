@@ -16,6 +16,8 @@ github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e h1:Wf6HqHfScWJN9
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/deathowl/go-metrics-prometheus v0.0.0-20181105123824-7cfe975c505b h1:9dj08d9Flaexn3poWqgmV2/LRRhz4rbTMrL6eTGDOAM=
+github.com/deathowl/go-metrics-prometheus v0.0.0-20181105123824-7cfe975c505b/go.mod h1:HyiO0WRMVDmaYgeKx/frAiip/fVpUwteTT/RkjwiA0Q=
 github.com/drdaeman/viper-mate v0.1.1 h1:1ODMVwd9UJJ503fgR6RF/mirQ7WkPyfrhphPW3QfCkc=
 github.com/drdaeman/viper-mate v0.1.1/go.mod h1:bzgMqLOCrayWq646CNoEwbuLMuvkrvucs7uQ6Begj0w=
 github.com/fsnotify/fsnotify v1.4.7 h1:IXs+QLmnXW2CcXuY+8Mzv/fWEsPGWxqefPtCP5CnV9I=

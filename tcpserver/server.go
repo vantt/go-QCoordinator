@@ -16,7 +16,7 @@ import (
 type TcpServer struct {
 	address string
 	listener *net.TCPListener
-	clients  []*client
+	clients  *clientList
 	dispatcher *dispatcher.Dispatcher
 	mutex    *sync.Mutex
 	logger   *zap.Logger
@@ -26,6 +26,7 @@ type TcpServer struct {
 func NewServer(address string, dp *dispatcher.Dispatcher, logger *zap.Logger) *TcpServer {
 	return &TcpServer{
 		address: address,
+		clients: NewClientList(),
 		mutex: &sync.Mutex{},
 		dispatcher: dp,
 		logger: logger,
@@ -71,7 +72,8 @@ func (s *TcpServer) Start(ctx context.Context, wg *sync.WaitGroup, readyChan cha
 		var wgChild sync.WaitGroup
 
 		defer func() {
-			wgChild.Wait()			
+			wgChild.Wait()
+			s.clients.Cleanup()		
 			wg.Done()
 			s.logger.Info("Tcpserver QUIT.")
 		}()
@@ -112,28 +114,15 @@ func (s *TcpServer) SendCommand(client *client, cmd protocol.CommandInterface) {
 }
 
 func (s *TcpServer) accept(conn net.Conn) *client {
-	s.logger.Info(fmt.Sprintf("Accepting connection from %v, total clients: %v", conn.RemoteAddr().String(), len(s.clients)+1))
+	s.logger.Info(fmt.Sprintf("Accepting connection from %v, total clients: %v", conn.RemoteAddr().String(), s.clients.Len()))
 
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	client := NewClient(conn, len(s.clients))
-		
-	s.clients = append(s.clients, client)
-
-	return client
+	return s.clients.Add(conn)
 }
 
 func (s *TcpServer) remove(client *client) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	client.Close()
-
-	// remove the connections from clients array
-	s.clients = append(s.clients[:client.index], s.clients[client.index+1:]...)
+	s.clients.Remove(client)
 	
-	s.logger.Info(fmt.Sprintf("Closing connection from %v, total clients: %v", client.conn.RemoteAddr().String(), len(s.clients)+1))
+	s.logger.Info(fmt.Sprintf("Closing connection from %v, total clients: %v", client.conn.RemoteAddr().String(), s.clients.Len()))
 }
 
 func (s *TcpServer) serve(ctx context.Context, wg *sync.WaitGroup, client *client) {

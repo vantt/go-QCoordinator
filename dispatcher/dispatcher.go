@@ -43,7 +43,8 @@ type Dispatcher struct {
 	taskChan       chan *queue.Job
 	resultChan     chan *TaskResult
 
-	reservingTasks *ReservingTaskMap	
+	reservingTasks *ReservingTaskMap
+	metrics *DispatcherMetrics
 	
 }
 
@@ -54,7 +55,8 @@ func NewDispatcher(cfg config.BrokerConfig,logger *zap.Logger) *Dispatcher {
 		logger: logger,		
 		reserveChan:    make(chan struct{}, 1000),
 		taskChan:       make(chan *queue.Job, 1000),
-		resultChan:     make(chan *TaskResult, 1000),		
+		resultChan:     make(chan *TaskResult, 1000),	
+		metrics:        NewDispatcherMetrics(),	
 		processingJobs: 0,
 	}
 }
@@ -108,6 +110,8 @@ func (tc *Dispatcher) Start(ctx context.Context, wg *sync.WaitGroup, readyChan c
 
 						if job := tc.reserveJob(); job != nil {
 							tc.taskChan <- job
+							tc.metrics.Inc("total", []string{job.QueueName})
+							tc.metrics.Inc("serving", []string{job.QueueName})
 						}
 					}()
 				}
@@ -120,7 +124,8 @@ func (tc *Dispatcher) Start(ctx context.Context, wg *sync.WaitGroup, readyChan c
 						defer tc.wgChild.Done()
 
 						if task := tc.reservingTasks.GetItem(result.ID); task != nil {
-							tc.handleJobResult(task, result)							
+							tc.handleJobResult(task, result)				
+							tc.metrics.Dec("serving", []string{task.Queue})			
 						}
 					}()					
 				}
@@ -196,6 +201,8 @@ func (tc *Dispatcher) handleJobResult(task *ReservingTask, result *TaskResult) (
 	task.CalcRuntime()	
 	tc.scheduler.UpdateJobCost(task.Queue, task.Runtime)
 
+	tc.metrics.Observe("latency", task.Runtime, []string{task.Queue})
+
 	// we dont process TIMEOUT task here
 	// because the queue will automatically give task to another worker
 
@@ -203,10 +210,13 @@ func (tc *Dispatcher) handleJobResult(task *ReservingTask, result *TaskResult) (
 	case 0:
 
 		err = tc.connPool.DeleteMessage(task.Queue, task.ID)
+		tc.metrics.Inc("exec_success", []string{task.Queue})
 
-		if err == nil {
+		if err == nil {			
+			tc.metrics.Inc("delete_success", []string{task.Queue})	
 			logger.Info("Delete job")			
-		} else {
+		} else {		
+			tc.metrics.Inc("delete_fail", []string{task.Queue})	
 			logger.With(zap.String("error", err.Error())).Error("Deleting job FAIL")			
 		}
 
@@ -220,14 +230,16 @@ func (tc *Dispatcher) handleJobResult(task *ReservingTask, result *TaskResult) (
 		// r*r*r*r means final of 10 tries has 1h49m21s delay, 4h15m33s total.
 		// See: http://play.golang.org/p/I15lUWoabI
 		delay := time.Duration(r*r*r*r) * time.Second
-
+		tc.metrics.Inc("exec_fail", []string{task.Queue})
 		logger.With(zap.String("error", result.ErrorMsg)).Error("Job execution FAIL")
 
 		err = tc.connPool.ReturnMessage(task.Queue, task.ID, delay)
 
 		if err != nil {
+			tc.metrics.Inc("return_fail", []string{task.Queue})
 			logger.With(zap.String("error", result.ErrorMsg)).Error("Return job Fail")
 		} else {
+			tc.metrics.Inc("return_success", []string{task.Queue})
 			logger.Info("Return job")
 		}
 	}
