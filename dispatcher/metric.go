@@ -12,7 +12,7 @@ type DispatcherMetrics struct {
 func NewDispatcherMetrics() *DispatcherMetrics {	
 	m := new(DispatcherMetrics)
 
-	m.SetMetricTypes(map[string]byte{
+	m.InitMetrics("qCoordinator", "dispatcher", map[string]byte{
 		"reserved":'c',
 		"reserving":'g',
 		"exec_success": 'c',

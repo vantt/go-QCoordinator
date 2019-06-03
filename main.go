@@ -16,6 +16,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
+	"net/http"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	//"github.com/coreos/go-systemd/daemon"
 	//"github.com/heptiolabs/healthcheck"
 
@@ -89,6 +91,11 @@ func setupBrokers(ctx context.Context, wg *sync.WaitGroup, conf *config.Configur
 	}
 
 	return nil
+}
+
+func setupMetricMonitor() {
+	http.Handle("/metrics", promhttp.Handler())
+	http.ListenAndServe(":2112", nil)
 }
 
 func signalsHandle() <-chan struct{} {
@@ -175,6 +182,9 @@ func main() {
 		runtime.Goexit()
 	}	
 
+	setupMetricMonitor();
+	
 	quit := signalsHandle()	
+
 	<-quit 
 }

@@ -110,8 +110,8 @@ func (tc *Dispatcher) Start(ctx context.Context, wg *sync.WaitGroup, readyChan c
 
 						if job := tc.reserveJob(); job != nil {
 							tc.taskChan <- job
-							tc.metrics.Inc("total", []string{job.QueueName})
-							tc.metrics.Inc("serving", []string{job.QueueName})
+							tc.metrics.Inc("reserved", []string{job.QueueName})
+							tc.metrics.Inc("reserving", []string{job.QueueName})
 						}
 					}()
 				}
@@ -125,7 +125,7 @@ func (tc *Dispatcher) Start(ctx context.Context, wg *sync.WaitGroup, readyChan c
 
 						if task := tc.reservingTasks.GetItem(result.ID); task != nil {
 							tc.handleJobResult(task, result)				
-							tc.metrics.Dec("serving", []string{task.Queue})			
+							tc.metrics.Dec("reserving", []string{task.Queue})			
 						}
 					}()					
 				}

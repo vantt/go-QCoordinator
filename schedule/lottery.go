@@ -18,7 +18,7 @@ type Lottery struct {
 	config       *config.BrokerConfig
 	tickets      map[string]int64
 	priority     map[string]uint64
-	metrics		 *ScheduleMetrics
+	metrics		 *scheduleMetrics
 	totalTickets int64
 	sync.RWMutex
 	logger *zap.Logger
@@ -154,7 +154,7 @@ func (lt *Lottery) wsjfFloat(stat *stats.QueueStatistic, priority uint64) float6
 
 	CostOfDelay := NumJobs * float64(priority)
 	JobDuration := NumJobs * AvgCost
-
+	
 	return CostOfDelay / JobDuration
 }
 
@@ -164,6 +164,8 @@ func (lt *Lottery) wsjfInt64(stat *stats.QueueStatistic, priority uint64) int64 
 
 	CostOfDelay := NumJobs * float64(priority)
 	JobDuration := NumJobs * AvgCost
+
+	lt.metrics.Set("ready", NumJobs, []string{stat.Name})
 
 	return int64(CostOfDelay / JobDuration)
 }
