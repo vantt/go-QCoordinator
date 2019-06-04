@@ -1,0 +1,12 @@
+[Unit]
+Description=Go Beanstalkd Queue Coordinator
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+Restart=on-failure
+ExecStart=/usr/local/bin/go-qcoordinator
+
+[Install]
+WantedBy=multi-user.target

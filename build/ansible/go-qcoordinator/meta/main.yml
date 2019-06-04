@@ -1,0 +1,15 @@
+galaxy_info:
+  author: Van Tran <vantt@anphabe.com>
+  description: Install Go-QCoordinator Service
+  company: Anphabe.com
+  license: MIT
+  min_ansible_version: 1.8.1
+  platforms:
+    - name: EL
+      versions:
+        - 7
+  categories:
+
+dependencies:
+
+

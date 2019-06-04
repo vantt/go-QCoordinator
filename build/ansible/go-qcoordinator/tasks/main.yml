@@ -1,0 +1,35 @@
+---
+
+- name: Creates config directory
+  file:
+    path: /etc/go-qcoordinator
+    state: directory
+
+- name: Creates log directory
+  file:
+    path: /var/log/go-qcoordinator
+    state: directory
+
+- name: Copy File to server
+  copy:
+    src: go-qcoordinator
+    dest: /usr/local/bin/go-qcoordinator
+    mode: 0755
+
+- name: Copy Config to server
+  copy:
+    src: go-qcoordinator.yaml
+    dest: /etc/go-qcoordinator/go-qcoordinator.yaml
+
+- name: Create systemd unit file
+  copy:
+    src: go-qcoordinator.service
+    dest: /etc/systemd/system/go-qcoordinator.service
+    mode: 0664
+
+- name: Start Go-QCoordinator
+  systemd:
+    name: go-qcoordinator
+    state: started
+    enabled: yes
+    daemon_reload: yes

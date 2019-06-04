@@ -1,0 +1,33 @@
+logging:
+  Filename: /var/log/go-qcoordinator/go-qcoordinator.log
+  MaxSize: 100
+  MaxBackups: 3
+  MaxAge: 28
+monitor:
+  host: 127.0.0.1:8086
+brokers:
+  - listen: 0.0.0.0:8087
+    scheduler: lottery
+    queuehost: "beanstalkd1_internal:11300"
+    queues:
+      - priority: 3000
+        queuenames:
+          - fsearch
+          - voting
+          - company_review
+      - priority: 500
+        queuenames:
+          - cron
+          - spam_detect
+          - mail
+          - slow_mail
+          - profile_statistic
+          - invitation
+          - mass_invite
+          - discussion_mail
+      - priority: 50
+        queuenames:
+          - others
+
+
+
