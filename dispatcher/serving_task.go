@@ -62,7 +62,7 @@ func NewReservingTaskMap(ctx context.Context, logger *zap.Logger) *ReservingTask
 		logger: logger,
 	}
 
-	m.cleanupTimer(ctx);
+	m.cleanupTimer(ctx)
 
 	return m
 }
@@ -124,7 +124,7 @@ func (m *ReservingTaskMap) AddItem(item *ReservingTask) bool {
 
 // RemoveItem ...
 func (m *ReservingTaskMap) RemoveItem(id uint64) bool {
-	_, ok := m.items[id]; 
+	_, ok := m.items[id]
 
 	if ok {
 		m.Lock()

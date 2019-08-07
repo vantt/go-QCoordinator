@@ -205,6 +205,10 @@ func (tc *Dispatcher) handleJobResult(task *ReservingTask, result *TaskResult) (
 
 	// we dont process TIMEOUT task here
 	// because the queue will automatically give task to another worker
+	if task.IsTimeOut() {
+		logger.Info("Task time out, handle nothing")
+		return
+	}
 
 	switch result.ExitCode {
 	case 0:
