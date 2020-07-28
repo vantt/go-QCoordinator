@@ -107,8 +107,8 @@ func (lt *Lottery) assignTickets(stats *stats.ServerStatistic) {
 			wsjf := lt.wsjfInt64(stat, lt.getQueuePriority(queueName))
 
 			if wsjf > 0 {				
-				tmpTickets[queueName] = wsjf
 				tmpTotal += wsjf
+				tmpTickets[queueName] = tmpTotal
 			}
 		}
 	}
